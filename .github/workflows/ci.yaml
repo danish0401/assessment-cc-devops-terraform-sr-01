@@ -1,0 +1,39 @@
+name: Continous Integeration
+
+on:
+  pull_request:
+    branches:
+        - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v3 
+        with:
+            node-version: '15'
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install dependencies npm install
+        run: npm install
+
+      - name: Linter (ESLint) npm run lint
+        run: npm run lint
+
+      - name: Formatter (Prettier) npm run prettier
+        run: npm run prettier -- --write
+
+      - name: Test with Jest
+        run: npm run test -- --ci
+
+      - name: build
+        run: npm run build
+
+      - name: Archive Build Artifacts
+        uses: actions/upload-artifact@v4
+        with: 
+          name: build-artifacts
+          path: build
