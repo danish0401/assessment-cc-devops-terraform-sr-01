@@ -24,12 +24,17 @@ jobs:
         run: npm run lint
 
       - name: Formatter (Prettier) npm run prettier
-        run: npm run prettier
+        run: npm run prettier -- --write
 
       - name: Test with Jest
-        run: npm run test
+        run: npm run test -- --ci
 
       - name: build
         run: npm run build
 
-      
+      - name: Archive Build Artifacts
+        uses: actions/upload-artifacts@v4
+        with: 
+          name: build-artifacts
+          path: build
+          
