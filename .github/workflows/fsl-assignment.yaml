@@ -1,0 +1,99 @@
+
+name: CICD for dev env
+
+on:
+  pull_request:
+    branches:
+        - "*"
+
+env:
+    ENV: devel
+    bucket_name: dev-fsl-site-0900
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v3 
+        with:
+            node-version: '15'
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install dependencies npm install
+        run: npm install
+
+      - name: Linter (ESLint) npm run lint
+        run: npm run lint
+
+      - name: Formatter (Prettier) npm run prettier
+        run: npm run prettier -- --write
+
+      - name: Test with Jest
+        run: npm run test -- --ci
+
+      - name: build
+        run: npm run build
+
+      - name: Archive Build Artifacts
+        uses: actions/upload-artifact@v4
+        with: 
+          name: build-artifacts
+          path: build
+
+  infra:
+    runs-on: ubuntu-latest
+    needs: [build]
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform =_wrapper: false
+
+      - name: Terraform init
+        run: |
+            terraform init
+            terraform workspace new ${{ env.ENV }} || echo "Workspace ${{ env.ENV }}" already exists
+    
+      - name: Terraform plan
+        run: |
+            terraform workspace select ${{ env.ENV }}
+            terraform plan --var-file config/${{ env.ENV }}.tfvars
+      - name: Terrafo apply
+        run: |
+            terraform apply --var-file config/${{ env.ENV }}.tfvars --auto-approve
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build,infra]
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4 
+        with: 
+            name: build-artifacts
+            path: build
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      - name: aws S3 sync
+        run: | 
+            aws s3 sync build/ s3://${{ env.bucket_name }}
+
